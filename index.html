@@ -70,6 +70,64 @@
       border-bottom: 2px solid #dee2e6;
     }
 
+    .search-section {
+      margin-bottom: 25px;
+    }
+
+    .search-container {
+      background: white;
+      padding: 20px;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e9ecef;
+    }
+
+    .search-container label {
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 10px;
+      display: block;
+      font-size: 1rem;
+    }
+
+    #searchInput {
+      width: 100%;
+      padding: 15px 20px;
+      border: 2px solid #e9ecef;
+      border-radius: 12px;
+      font-size: 1.1rem;
+      transition: all 0.3s ease;
+      background: linear-gradient(to right, #fff, #f8f9fa);
+    }
+
+    #searchInput:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+      transform: translateY(-1px);
+      background: white;
+    }
+
+    .search-stats {
+      margin-top: 12px;
+      font-size: 0.9rem;
+      color: #6c757d;
+      font-weight: 500;
+      text-align: center;
+      padding: 8px;
+      background: rgba(102, 126, 234, 0.05);
+      border-radius: 8px;
+      display: none;
+    }
+
+    .search-stats.active {
+      display: block;
+    }
+
+    .machine-card.hidden {
+      display: none;
+    }
+
     .add-machine-form {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -370,21 +428,42 @@
       100% { left: 100%; }
     }
 
+    @media (max-width: 1200px) {
+      .machines-grid {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      }
+    }
+
     @media (max-width: 768px) {
       .machines-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 8px;
+        padding: 10px;
       }
       
       .add-machine-form {
         grid-template-columns: 1fr;
+        padding: 15px;
       }
       
       .machine-actions {
         flex-direction: column;
+        gap: 2px;
       }
       
       .url-input-group {
         flex-direction: column;
+        gap: 2px;
+      }
+
+      .machine-card {
+        padding: 8px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .machines-grid {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
       }
     }
   </style>
@@ -397,6 +476,14 @@
     </div>
 
     <div class="controls-section">
+      <div class="search-section">
+        <div class="search-container">
+          <label for="searchInput">🔍 Search Machines</label>
+          <input type="text" id="searchInput" placeholder="Search by machine name..." oninput="filterMachines()">
+          <div class="search-stats" id="searchStats"></div>
+        </div>
+      </div>
+      
       <div class="add-machine-form">
         <div class="form-group">
           <label for="machineName">Machine Name</label>
@@ -451,15 +538,60 @@
       "Custom Note"
     ];
 
-    let machines = JSON.parse(localStorage.getItem('machines')) || [];
-    let machineStates = JSON.parse(localStorage.getItem('machineStates')) || {};
+    let machines = [];
+    let machineStates = {};
+    let filteredMachines = machines; // Track filtered results
 
     function saveMachines() {
-      localStorage.setItem('machines', JSON.stringify(machines));
+      // Using in-memory storage instead of localStorage for Claude.ai compatibility
     }
 
     function saveMachineStates() {
-      localStorage.setItem('machineStates', JSON.stringify(machineStates));
+      // Using in-memory storage instead of localStorage for Claude.ai compatibility
+    }
+
+    function filterMachines() {
+      const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
+      const searchStats = document.getElementById('searchStats');
+      
+      if (!searchTerm) {
+        // No search term - show all machines
+        filteredMachines = machines;
+        searchStats.classList.remove('active');
+        renderMachines();
+        return;
+      }
+
+      // Filter machines by name (case-insensitive)
+      filteredMachines = machines.filter(machine => 
+        machine.name.toLowerCase().includes(searchTerm)
+      );
+
+      // Update search statistics
+      const totalMachines = machines.length;
+      const foundMachines = filteredMachines.length;
+      
+      if (foundMachines === 0) {
+        searchStats.innerHTML = `❌ No machines found matching "${searchTerm}"`;
+        searchStats.style.background = 'rgba(220, 53, 69, 0.1)';
+        searchStats.style.color = '#dc3545';
+      } else if (foundMachines === totalMachines) {
+        searchStats.innerHTML = `✅ Showing all ${totalMachines} machines`;
+        searchStats.style.background = 'rgba(40, 167, 69, 0.1)';
+        searchStats.style.color = '#28a745';
+      } else {
+        searchStats.innerHTML = `🔍 Found ${foundMachines} of ${totalMachines} machines`;
+        searchStats.style.background = 'rgba(102, 126, 234, 0.1)';
+        searchStats.style.color = '#667eea';
+      }
+      
+      searchStats.classList.add('active');
+      renderMachines();
+    }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      filterMachines();
     }
 
     function updateStatus(message) {
@@ -509,12 +641,20 @@
       
       saveMachines();
       saveMachineStates();
+      
+      // Update filtered machines and re-render
+      filteredMachines = machines;
       renderMachines();
       
       // Clear form
       document.getElementById('machineName').value = '';
       document.getElementById('gpioPin').value = '';
       document.getElementById('customUrl').value = '';
+      
+      // Clear search if active
+      if (document.getElementById('searchInput').value) {
+        clearSearch();
+      }
       
       updateStatus(`✅ Machine "${name}" added successfully!`);
     }
@@ -525,7 +665,11 @@
         delete machineStates[machineId];
         saveMachines();
         saveMachineStates();
-        renderMachines();
+        
+        // Update filtered machines and re-render
+        filteredMachines = machines;
+        filterMachines(); // This will re-apply current search filter
+        
         updateStatus('🗑️ Machine deleted successfully');
       }
     }
@@ -575,17 +719,34 @@
     function renderMachines() {
       const container = document.getElementById('machinesContainer');
       
-      if (machines.length === 0) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <h3>🏭 No Machines Added Yet</h3>
-            <p>Start by adding your first machine using the form above</p>
-          </div>
-        `;
+      // Use filtered machines instead of all machines
+      if (filteredMachines.length === 0) {
+        const searchTerm = document.getElementById('searchInput').value.trim();
+        
+        if (machines.length === 0) {
+          // No machines at all
+          container.innerHTML = `
+            <div class="empty-state">
+              <h3>🏭 No Machines Added Yet</h3>
+              <p>Start by adding your first machine using the form above</p>
+            </div>
+          `;
+        } else if (searchTerm) {
+          // No results for search
+          container.innerHTML = `
+            <div class="empty-state">
+              <h3>🔍 No Matches Found</h3>
+              <p>No machines match "${searchTerm}"</p>
+              <button class="btn btn-add" onclick="clearSearch()" style="margin-top: 15px;">
+                🔄 Clear Search
+              </button>
+            </div>
+          `;
+        }
         return;
       }
 
-      container.innerHTML = machines.map(machine => {
+      container.innerHTML = filteredMachines.map(machine => {
         const state = machineStates[machine.id] || { status: 'offline', lastAction: 'None' };
         const statusClass = state.status === 'online' ? 'online' : 'offline';
         const statusIcon = state.status === 'online' ? '🟢' : '⚫';
@@ -663,6 +824,7 @@
 
     // Initialize the application
     document.addEventListener('DOMContentLoaded', function() {
+      filteredMachines = machines; // Initialize filtered machines
       renderMachines();
       updateStatus('🚀 Machine Control Center initialized successfully!');
     });
@@ -671,6 +833,13 @@
     document.addEventListener('keydown', function(e) {
       if (e.ctrlKey && e.key === 'Enter') {
         addMachine();
+      } else if (e.key === 'Escape') {
+        // Clear search on Escape key
+        clearSearch();
+      } else if (e.ctrlKey && e.key === 'f') {
+        // Focus search on Ctrl+F
+        e.preventDefault();
+        document.getElementById('searchInput').focus();
       }
     });
   </script>
