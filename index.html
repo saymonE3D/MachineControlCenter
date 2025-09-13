@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dynamic Machine Control Panel</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      color: #333;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .header {
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+      position: relative;
+    }
+
+    .header::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+      opacity: 0.3;
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      position: relative;
+      z-index: 1;
+    }
+
+    .header p {
+      font-size: 1.1rem;
+      opacity: 0.9;
+      position: relative;
+      z-index: 1;
+    }
+
+    .controls-section {
+      padding: 30px;
+      background: linear-gradient(to right, #f8f9fa, #e9ecef);
+      border-bottom: 2px solid #dee2e6;
+    }
+
+    .add-machine-form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      align-items: end;
+      background: white;
+      padding: 25px;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e9ecef;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .form-group label {
+      font-weight: 600;
+      color: #495057;
+      margin-bottom: 8px;
+      font-size: 0.9rem;
+    }
+
+    .form-group input,
+    .form-group select {
+      padding: 12px 15px;
+      border: 2px solid #e9ecef;
+      border-radius: 10px;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      background: #fff;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      transform: translateY(-1px);
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      transition: width 0.3s, height 0.3s;
+    }
+
+    .btn:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    .btn-add {
+      background: linear-gradient(135deg, #28a745, #20c997);
+      color: white;
+      box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+    }
+
+    .btn-add:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
+    }
+
+    .machines-grid {
+      padding: 30px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      gap: 20px;
+    }
+
+    .machine-card {
+      background: white;
+      border-radius: 15px;
+      padding: 25px;
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e9ecef;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .machine-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, #667eea, #764ba2);
+    }
+
+    .machine-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+    }
+
+    .machine-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .machine-name {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #2c3e50;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .machine-status {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #6c757d;
+      position: relative;
+    }
+
+    .machine-status::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      border-radius: 50%;
+      background: inherit;
+      opacity: 0.3;
+      animation: pulse 2s infinite;
+    }
+
+    .machine-status.online {
+      background: #28a745;
+    }
+
+    .machine-status.offline {
+      background: #dc3545;
+    }
+
+    .machine-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+
+    .info-item {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+
+    .info-label {
+      font-weight: 600;
+      color: #6c757d;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      margin-bottom: 4px;
+    }
+
+    .info-value {
+      color: #495057;
+      font-weight: 500;
+    }
+
+    .custom-url-section {
+      margin-bottom: 20px;
+    }
+
+    .url-input-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    .url-input {
+      flex: 1;
+      padding: 10px 15px;
+      border: 2px solid #e9ecef;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+
+    .machine-actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .btn-on {
+      background: linear-gradient(135deg, #28a745, #20c997);
+      color: white;
+      flex: 1;
+    }
+
+    .btn-off {
+      background: linear-gradient(135deg, #dc3545, #c82333);
+      color: white;
+      flex: 1;
+    }
+
+    .btn-save {
+      background: linear-gradient(135deg, #007bff, #0056b3);
+      color: white;
+      min-width: 80px;
+    }
+
+    .btn-delete {
+      background: linear-gradient(135deg, #6c757d, #495057);
+      color: white;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+    }
+
+    .instruction-select {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #e9ecef;
+      border-radius: 8px;
+      background: white;
+      font-size: 0.9rem;
+    }
+
+    .status-panel {
+      margin: 20px 30px;
+      padding: 20px;
+      background: linear-gradient(135deg, #d4edda, #c3e6cb);
+      border: 2px solid #b8daff;
+      border-radius: 15px;
+      font-weight: 600;
+      color: #155724;
+      text-align: center;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .status-panel::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      animation: shimmer 2s infinite;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 30px;
+      color: #6c757d;
+    }
+
+    .empty-state h3 {
+      font-size: 1.8rem;
+      margin-bottom: 15px;
+      color: #495057;
+    }
+
+    .empty-state p {
+      font-size: 1.1rem;
+      margin-bottom: 30px;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.3; }
+      50% { transform: scale(1.2); opacity: 0.6; }
+      100% { transform: scale(1); opacity: 0.3; }
+    }
+
+    @keyframes shimmer {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+
+    @media (max-width: 768px) {
+      .machines-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .add-machine-form {
+        grid-template-columns: 1fr;
+      }
+      
+      .machine-actions {
+        flex-direction: column;
+      }
+      
+      .url-input-group {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚀 Machine Control Center</h1>
+      <p>Advanced Dynamic Machine Management System</p>
+    </div>
+
+    <div class="controls-section">
+      <div class="add-machine-form">
+        <div class="form-group">
+          <label for="machineName">Machine Name</label>
+          <input type="text" id="machineName" placeholder="e.g., e3ds-s1">
+        </div>
+        <div class="form-group">
+          <label for="piSelect">Raspberry Pi</label>
+          <select id="piSelect">
+            <option value="P-1">P-1 (rpi1.eagle3dstreaming.com)</option>
+            <option value="P-2">P-2 (rpi2.eagle3dstreaming.com)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="gpioPin">GPIO Pin</label>
+          <input type="number" id="gpioPin" placeholder="e.g., 2" min="1" max="40">
+        </div>
+        <div class="form-group">
+          <label for="customUrl">Custom URL (Optional)</label>
+          <input type="text" id="customUrl" placeholder="https://example.com">
+        </div>
+        <div class="form-group">
+          <button class="btn btn-add" onclick="addMachine()">
+            ➕ Add Machine
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="statusPanel" class="status-panel">
+      🎯 Status: Ready to manage machines...
+    </div>
+
+    <div id="machinesContainer" class="machines-grid">
+      <div class="empty-state">
+        <h3>🏭 No Machines Added Yet</h3>
+        <p>Start by adding your first machine using the form above</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const baseUrls = {
+      "P-1": "https://rpi1.eagle3dstreaming.com",
+      "P-2": "https://rpi2.eagle3dstreaming.com"
+    };
+
+    const instructions = [
+      "Don't Off", 
+      "Keep Online", 
+      "Restart", 
+      "Maintenance Mode", 
+      "Custom Note"
+    ];
+
+    let machines = JSON.parse(localStorage.getItem('machines')) || [];
+    let machineStates = JSON.parse(localStorage.getItem('machineStates')) || {};
+
+    function saveMachines() {
+      localStorage.setItem('machines', JSON.stringify(machines));
+    }
+
+    function saveMachineStates() {
+      localStorage.setItem('machineStates', JSON.stringify(machineStates));
+    }
+
+    function updateStatus(message) {
+      const statusPanel = document.getElementById('statusPanel');
+      statusPanel.innerHTML = `🎯 Status: ${message}`;
+      
+      // Auto-hide status after 3 seconds
+      setTimeout(() => {
+        statusPanel.innerHTML = '🎯 Status: Ready to manage machines...';
+      }, 3000);
+    }
+
+    function addMachine() {
+      const name = document.getElementById('machineName').value.trim();
+      const pi = document.getElementById('piSelect').value;
+      const gpio = parseInt(document.getElementById('gpioPin').value);
+      const customUrl = document.getElementById('customUrl').value.trim();
+
+      if (!name || !gpio) {
+        updateStatus('❌ Please fill in machine name and GPIO pin');
+        return;
+      }
+
+      // Check if machine already exists
+      if (machines.some(m => m.name === name)) {
+        updateStatus('⚠️ Machine with this name already exists');
+        return;
+      }
+
+      // Check if GPIO pin is already used for this Pi
+      if (machines.some(m => m.pi === pi && m.gpio === gpio)) {
+        updateStatus('⚠️ GPIO pin already in use for this Raspberry Pi');
+        return;
+      }
+
+      const newMachine = {
+        id: Date.now(),
+        name: name,
+        pi: pi,
+        gpio: gpio,
+        customUrl: customUrl,
+        addedAt: new Date().toLocaleString()
+      };
+
+      machines.push(newMachine);
+      machineStates[newMachine.id] = { status: 'offline', lastAction: 'None' };
+      
+      saveMachines();
+      saveMachineStates();
+      renderMachines();
+      
+      // Clear form
+      document.getElementById('machineName').value = '';
+      document.getElementById('gpioPin').value = '';
+      document.getElementById('customUrl').value = '';
+      
+      updateStatus(`✅ Machine "${name}" added successfully!`);
+    }
+
+    function deleteMachine(machineId) {
+      if (confirm('Are you sure you want to delete this machine?')) {
+        machines = machines.filter(m => m.id !== machineId);
+        delete machineStates[machineId];
+        saveMachines();
+        saveMachineStates();
+        renderMachines();
+        updateStatus('🗑️ Machine deleted successfully');
+      }
+    }
+
+    function saveCustomUrl(machineId) {
+      const machine = machines.find(m => m.id === machineId);
+      const urlInput = document.getElementById(`url_${machineId}`);
+      
+      machine.customUrl = urlInput.value.trim();
+      saveMachines();
+      updateStatus(`💾 Custom URL saved for ${machine.name}`);
+    }
+
+    function controlMachine(machineId, action) {
+      const machine = machines.find(m => m.id === machineId);
+      const isOn = action === 'on';
+      
+      const defaultUrl = isOn 
+        ? `${baseUrls[machine.pi]}/run/${machine.gpio}?force=true`
+        : `${baseUrls[machine.pi]}/stop/${machine.gpio}?force=true`;
+      
+      const finalUrl = machine.customUrl || defaultUrl;
+      
+      // Update machine state
+      machineStates[machineId] = {
+        status: isOn ? 'online' : 'offline',
+        lastAction: isOn ? 'Started' : 'Stopped',
+        lastActionTime: new Date().toLocaleString()
+      };
+      
+      saveMachineStates();
+      renderMachines();
+      
+      // Open URL in new tab
+      window.open(finalUrl, '_blank');
+      
+      const actionEmoji = isOn ? '🟢' : '🔴';
+      const actionText = isOn ? 'started' : 'stopped';
+      updateStatus(`${actionEmoji} ${machine.name} ${actionText} (${finalUrl})`);
+    }
+
+    function updateInstruction(machineId, instruction) {
+      const machine = machines.find(m => m.id === machineId);
+      updateStatus(`📋 ${machine.name} → Instruction: ${instruction}`);
+    }
+
+    function renderMachines() {
+      const container = document.getElementById('machinesContainer');
+      
+      if (machines.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <h3>🏭 No Machines Added Yet</h3>
+            <p>Start by adding your first machine using the form above</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = machines.map(machine => {
+        const state = machineStates[machine.id] || { status: 'offline', lastAction: 'None' };
+        const statusClass = state.status === 'online' ? 'online' : 'offline';
+        const statusIcon = state.status === 'online' ? '🟢' : '⚫';
+        const machineType = machine.isHardcoded ? '📌 Pre-configured' : '➕ Custom Added';
+        const machineTypeColor = machine.isHardcoded ? '#ffc107' : '#28a745';
+        
+        return `
+          <div class="machine-card" style="${machine.isHardcoded ? 'border-left: 4px solid #ffc107;' : 'border-left: 4px solid #28a745;'}">
+            <div class="machine-header">
+              <div class="machine-name">${machine.name}</div>
+              <div class="machine-status ${statusClass}" title="${state.status}"></div>
+            </div>
+            
+            <div class="machine-info">
+              <div class="info-item">
+                <div class="info-label">Type</div>
+                <div class="info-value" style="color: ${machineTypeColor}; font-weight: 600;">${machineType}</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Raspberry Pi</div>
+                <div class="info-value">${machine.pi}</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">GPIO Pin</div>
+                <div class="info-value">#${machine.gpio}</div>
+              </div>
+              <div class="info-item">
+                <div class="info-label">Status</div>
+                <div class="info-value">${statusIcon} ${state.status.toUpperCase()}</div>
+              </div>
+            </div>
+
+            <div class="custom-url-section">
+              <label class="info-label">Custom URL Override</label>
+              <div class="url-input-group">
+                <input type="text" 
+                       class="url-input" 
+                       id="url_${machine.id}" 
+                       value="${machine.customUrl || ''}" 
+                       placeholder="Enter custom URL to override default">
+                <button class="btn btn-save" onclick="saveCustomUrl(${machine.id})">
+                  💾 Save
+                </button>
+              </div>
+            </div>
+
+            <div class="machine-actions">
+              <button class="btn btn-on" onclick="controlMachine(${machine.id}, 'on')">
+                ⚡ START
+              </button>
+              <button class="btn btn-off" onclick="controlMachine(${machine.id}, 'off')">
+                🛑 STOP
+              </button>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+              <select class="instruction-select" 
+                      onchange="updateInstruction(${machine.id}, this.value)"
+                      style="flex: 1;">
+                ${instructions.map(inst => `<option value="${inst}">${inst}</option>`).join('')}
+              </select>
+              <button class="btn btn-delete" onclick="deleteMachine(${machine.id})">
+                🗑️
+              </button>
+            </div>
+
+            <div style="font-size: 0.8rem; color: #6c757d; text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e9ecef;">
+              Added: ${machine.addedAt}
+              ${state.lastActionTime ? `<br>Last Action: ${state.lastActionTime}` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Initialize the application
+    document.addEventListener('DOMContentLoaded', function() {
+      renderMachines();
+      updateStatus('🚀 Machine Control Center initialized successfully!');
+    });
+
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if (e.ctrlKey && e.key === 'Enter') {
+        addMachine();
+      }
+    });
+  </script>
+</body>
+</html>
