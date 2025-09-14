@@ -202,13 +202,18 @@
       height: 300px;
     }
 
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
     .btn-add {
       background: linear-gradient(135deg, #28a745, #20c997);
       color: white;
       box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
     }
 
-    .btn-add:hover {
+    .btn-add:hover:not(:disabled) {
       transform: translateY(-2px);
       box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
     }
@@ -400,6 +405,31 @@
       animation: shimmer 2s infinite;
     }
 
+    .status-panel.error {
+      background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+      color: #721c24;
+      border-color: #f5c6cb;
+    }
+
+    .loading {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    .loading::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 20px;
+      height: 20px;
+      margin: -10px 0 0 -10px;
+      border: 2px solid #667eea;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 1s linear infinite;
+    }
+
     .empty-state {
       text-align: center;
       padding: 60px 30px;
@@ -426,6 +456,11 @@
     @keyframes shimmer {
       0% { left: -100%; }
       100% { left: 100%; }
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
 
     @media (max-width: 1200px) {
@@ -505,7 +540,7 @@
           <input type="text" id="customUrl" placeholder="https://example.com">
         </div>
         <div class="form-group">
-          <button class="btn btn-add" onclick="addMachine()">
+          <button class="btn btn-add" id="addMachineBtn" onclick="addMachine()">
             ➕ Add Machine
           </button>
         </div>
@@ -513,18 +548,21 @@
     </div>
 
     <div id="statusPanel" class="status-panel">
-      🎯 Status: Ready to manage machines...
+      🎯 Status: Loading machines from database...
     </div>
 
     <div id="machinesContainer" class="machines-grid">
       <div class="empty-state">
-        <h3>🏭 No Machines Added Yet</h3>
-        <p>Start by adding your first machine using the form above</p>
+        <h3>🔄 Loading Machines...</h3>
+        <p>Fetching data from MongoDB Atlas...</p>
       </div>
     </div>
   </div>
 
   <script>
+    // API Configuration
+    const API_BASE_URL = 'https://machine-control-center-backend.vercel.app/api'; // Adjust this if your backend is on a different port/domain
+
     const baseUrls = {
       "P-1": "https://rpi1.eagle3dstreaming.com",
       "P-2": "https://rpi2.eagle3dstreaming.com"
@@ -539,17 +577,194 @@
     ];
 
     let machines = [];
-    let machineStates = {};
-    let filteredMachines = machines; // Track filtered results
+    let filteredMachines = []; // Track filtered results
+    let isLoading = false;
 
-    function saveMachines() {
-      // Using in-memory storage instead of localStorage for Claude.ai compatibility
+    // API Helper Functions
+    async function apiRequest(endpoint, options = {}) {
+      try {
+        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+          headers: {
+            'Content-Type': 'application/json',
+            ...options.headers
+          },
+          ...options
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.message || 'API request failed');
+        }
+
+        return data;
+      } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+      }
     }
 
-    function saveMachineStates() {
-      // Using in-memory storage instead of localStorage for Claude.ai compatibility
+    // Load machines from database
+    async function loadMachines() {
+      try {
+        setLoading(true);
+        updateStatus('🔄 Loading machines from database...');
+        
+        const response = await apiRequest('/machines');
+        machines = response.data;
+        filteredMachines = machines;
+        
+        renderMachines();
+        updateStatus(`✅ Loaded ${machines.length} machines successfully!`);
+      } catch (error) {
+        updateStatus(`❌ Error loading machines: ${error.message}`, 'error');
+        console.error('Failed to load machines:', error);
+      } finally {
+        setLoading(false);
+      }
     }
 
+    // Add machine to database
+    async function addMachine() {
+      const name = document.getElementById('machineName').value.trim();
+      const pi = document.getElementById('piSelect').value;
+      const gpio = parseInt(document.getElementById('gpioPin').value);
+      const customUrl = document.getElementById('customUrl').value.trim();
+
+      if (!name || !gpio) {
+        updateStatus('❌ Please fill in machine name and GPIO pin', 'error');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        updateStatus('🔄 Adding machine...');
+
+        const response = await apiRequest('/machines', {
+          method: 'POST',
+          body: JSON.stringify({
+            name,
+            pi,
+            gpio,
+            customUrl
+          })
+        });
+
+        // Reload machines to get the updated list
+        await loadMachines();
+        
+        // Clear form
+        document.getElementById('machineName').value = '';
+        document.getElementById('gpioPin').value = '';
+        document.getElementById('customUrl').value = '';
+        
+        // Clear search if active
+        if (document.getElementById('searchInput').value) {
+          clearSearch();
+        }
+        
+        updateStatus(`✅ ${response.message}`);
+      } catch (error) {
+        updateStatus(`❌ ${error.message}`, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Delete machine from database
+    async function deleteMachine(machineId) {
+      if (!confirm('Are you sure you want to delete this machine?')) {
+        return;
+      }
+
+      try {
+        setLoading(true);
+        updateStatus('🔄 Deleting machine...');
+
+        const response = await apiRequest(`/machines/${machineId}`, {
+          method: 'DELETE'
+        });
+
+        // Reload machines to get the updated list
+        await loadMachines();
+        
+        updateStatus(`✅ ${response.message}`);
+      } catch (error) {
+        updateStatus(`❌ Error deleting machine: ${error.message}`, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Save custom URL
+    async function saveCustomUrl(machineId) {
+      const urlInput = document.getElementById(`url_${machineId}`);
+      const customUrl = urlInput.value.trim();
+      
+      try {
+        setLoading(true);
+        
+        const response = await apiRequest(`/machines/${machineId}/url`, {
+          method: 'PUT',
+          body: JSON.stringify({ customUrl })
+        });
+
+        // Update local machine data
+        const machine = machines.find(m => m._id === machineId);
+        if (machine) {
+          machine.customUrl = customUrl;
+        }
+
+        updateStatus(`💾 ${response.message}`);
+      } catch (error) {
+        updateStatus(`❌ Error saving URL: ${error.message}`, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Control machine (start/stop)
+    async function controlMachine(machineId, action) {
+      const machine = machines.find(m => m._id === machineId);
+      if (!machine) return;
+
+      try {
+        setLoading(true);
+        const isOn = action === 'on';
+        
+        // Update machine state in database
+        const response = await apiRequest(`/machines/${machineId}/control`, {
+          method: 'PUT',
+          body: JSON.stringify({ action })
+        });
+
+        // Update local machine data
+        Object.assign(machine, response.data);
+        
+        // Render updated machines
+        renderMachines();
+        
+        // Generate control URL
+        const defaultUrl = isOn 
+          ? `${baseUrls[machine.pi]}/run/${machine.gpio}?force=true`
+          : `${baseUrls[machine.pi]}/stop/${machine.gpio}?force=true`;
+        
+        const finalUrl = machine.customUrl || defaultUrl;
+        
+        // Open URL in new tab
+        window.open(finalUrl, '_blank');
+        
+        const actionEmoji = isOn ? '🟢' : '🔴';
+        const actionText = isOn ? 'started' : 'stopped';
+        updateStatus(`${actionEmoji} ${machine.name} ${actionText} (${finalUrl})`);
+      } catch (error) {
+        updateStatus(`❌ Error controlling machine: ${error.message}`, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Filter machines
     function filterMachines() {
       const searchTerm = document.getElementById('searchInput').value.trim().toLowerCase();
       const searchStats = document.getElementById('searchStats');
@@ -594,126 +809,37 @@
       filterMachines();
     }
 
-    function updateStatus(message) {
+    function updateStatus(message, type = 'success') {
       const statusPanel = document.getElementById('statusPanel');
       statusPanel.innerHTML = `🎯 Status: ${message}`;
+      statusPanel.className = `status-panel ${type === 'error' ? 'error' : ''}`;
       
       // Auto-hide status after 3 seconds
       setTimeout(() => {
         statusPanel.innerHTML = '🎯 Status: Ready to manage machines...';
+        statusPanel.className = 'status-panel';
       }, 3000);
     }
 
-    function addMachine() {
-      const name = document.getElementById('machineName').value.trim();
-      const pi = document.getElementById('piSelect').value;
-      const gpio = parseInt(document.getElementById('gpioPin').value);
-      const customUrl = document.getElementById('customUrl').value.trim();
-
-      if (!name || !gpio) {
-        updateStatus('❌ Please fill in machine name and GPIO pin');
-        return;
+    function setLoading(loading) {
+      isLoading = loading;
+      const addBtn = document.getElementById('addMachineBtn');
+      const container = document.getElementById('machinesContainer');
+      
+      if (loading) {
+        addBtn.disabled = true;
+        container.classList.add('loading');
+      } else {
+        addBtn.disabled = false;
+        container.classList.remove('loading');
       }
-
-      // Check if machine already exists
-      if (machines.some(m => m.name === name)) {
-        updateStatus('⚠️ Machine with this name already exists');
-        return;
-      }
-
-      // Check if GPIO pin is already used for this Pi
-      if (machines.some(m => m.pi === pi && m.gpio === gpio)) {
-        updateStatus('⚠️ GPIO pin already in use for this Raspberry Pi');
-        return;
-      }
-
-      const newMachine = {
-        id: Date.now(),
-        name: name,
-        pi: pi,
-        gpio: gpio,
-        customUrl: customUrl,
-        addedAt: new Date().toLocaleString()
-      };
-
-      machines.push(newMachine);
-      machineStates[newMachine.id] = { status: 'offline', lastAction: 'None' };
-      
-      saveMachines();
-      saveMachineStates();
-      
-      // Update filtered machines and re-render
-      filteredMachines = machines;
-      renderMachines();
-      
-      // Clear form
-      document.getElementById('machineName').value = '';
-      document.getElementById('gpioPin').value = '';
-      document.getElementById('customUrl').value = '';
-      
-      // Clear search if active
-      if (document.getElementById('searchInput').value) {
-        clearSearch();
-      }
-      
-      updateStatus(`✅ Machine "${name}" added successfully!`);
-    }
-
-    function deleteMachine(machineId) {
-      if (confirm('Are you sure you want to delete this machine?')) {
-        machines = machines.filter(m => m.id !== machineId);
-        delete machineStates[machineId];
-        saveMachines();
-        saveMachineStates();
-        
-        // Update filtered machines and re-render
-        filteredMachines = machines;
-        filterMachines(); // This will re-apply current search filter
-        
-        updateStatus('🗑️ Machine deleted successfully');
-      }
-    }
-
-    function saveCustomUrl(machineId) {
-      const machine = machines.find(m => m.id === machineId);
-      const urlInput = document.getElementById(`url_${machineId}`);
-      
-      machine.customUrl = urlInput.value.trim();
-      saveMachines();
-      updateStatus(`💾 Custom URL saved for ${machine.name}`);
-    }
-
-    function controlMachine(machineId, action) {
-      const machine = machines.find(m => m.id === machineId);
-      const isOn = action === 'on';
-      
-      const defaultUrl = isOn 
-        ? `${baseUrls[machine.pi]}/run/${machine.gpio}?force=true`
-        : `${baseUrls[machine.pi]}/stop/${machine.gpio}?force=true`;
-      
-      const finalUrl = machine.customUrl || defaultUrl;
-      
-      // Update machine state
-      machineStates[machineId] = {
-        status: isOn ? 'online' : 'offline',
-        lastAction: isOn ? 'Started' : 'Stopped',
-        lastActionTime: new Date().toLocaleString()
-      };
-      
-      saveMachineStates();
-      renderMachines();
-      
-      // Open URL in new tab
-      window.open(finalUrl, '_blank');
-      
-      const actionEmoji = isOn ? '🟢' : '🔴';
-      const actionText = isOn ? 'started' : 'stopped';
-      updateStatus(`${actionEmoji} ${machine.name} ${actionText} (${finalUrl})`);
     }
 
     function updateInstruction(machineId, instruction) {
-      const machine = machines.find(m => m.id === machineId);
-      updateStatus(`📋 ${machine.name} → Instruction: ${instruction}`);
+      const machine = machines.find(m => m._id === machineId);
+      if (machine) {
+        updateStatus(`📋 ${machine.name} → Instruction: ${instruction}`);
+      }
     }
 
     function renderMachines() {
@@ -747,17 +873,18 @@
       }
 
       container.innerHTML = filteredMachines.map(machine => {
-        const state = machineStates[machine.id] || { status: 'offline', lastAction: 'None' };
-        const statusClass = state.status === 'online' ? 'online' : 'offline';
-        const statusIcon = state.status === 'online' ? '🟢' : '⚫';
+        const statusClass = machine.status === 'online' ? 'online' : 'offline';
+        const statusIcon = machine.status === 'online' ? '🟢' : '⚫';
         const machineType = machine.isHardcoded ? '📌 Pre-configured' : '➕ Custom Added';
         const machineTypeColor = machine.isHardcoded ? '#ffc107' : '#28a745';
+        const addedAt = new Date(machine.createdAt).toLocaleString();
+        const lastActionTime = machine.lastActionTime ? new Date(machine.lastActionTime).toLocaleString() : null;
         
         return `
           <div class="machine-card" style="${machine.isHardcoded ? 'border-left: 4px solid #ffc107;' : 'border-left: 4px solid #28a745;'}">
             <div class="machine-header">
               <div class="machine-name">${machine.name}</div>
-              <div class="machine-status ${statusClass}" title="${state.status}"></div>
+              <div class="machine-status ${statusClass}" title="${machine.status}"></div>
             </div>
             
             <div class="machine-info">
@@ -775,7 +902,7 @@
               </div>
               <div class="info-item">
                 <div class="info-label">Status</div>
-                <div class="info-value">${statusIcon} ${state.status.toUpperCase()}</div>
+                <div class="info-value">${statusIcon} ${machine.status.toUpperCase()}</div>
               </div>
             </div>
 
@@ -784,38 +911,38 @@
               <div class="url-input-group">
                 <input type="text" 
                        class="url-input" 
-                       id="url_${machine.id}" 
+                       id="url_${machine._id}" 
                        value="${machine.customUrl || ''}" 
                        placeholder="Enter custom URL to override default">
-                <button class="btn btn-save" onclick="saveCustomUrl(${machine.id})">
+                <button class="btn btn-save" onclick="saveCustomUrl('${machine._id}')">
                   💾 Save
                 </button>
               </div>
             </div>
 
             <div class="machine-actions">
-              <button class="btn btn-on" onclick="controlMachine(${machine.id}, 'on')">
+              <button class="btn btn-on" onclick="controlMachine('${machine._id}', 'on')">
                 ⚡ START
               </button>
-              <button class="btn btn-off" onclick="controlMachine(${machine.id}, 'off')">
+              <button class="btn btn-off" onclick="controlMachine('${machine._id}', 'off')">
                 🛑 STOP
               </button>
             </div>
 
             <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
               <select class="instruction-select" 
-                      onchange="updateInstruction(${machine.id}, this.value)"
+                      onchange="updateInstruction('${machine._id}', this.value)"
                       style="flex: 1;">
                 ${instructions.map(inst => `<option value="${inst}">${inst}</option>`).join('')}
               </select>
-              <button class="btn btn-delete" onclick="deleteMachine(${machine.id})">
+              <button class="btn btn-delete" onclick="deleteMachine('${machine._id}')">
                 🗑️
               </button>
             </div>
 
             <div style="font-size: 0.8rem; color: #6c757d; text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #e9ecef;">
-              Added: ${machine.addedAt}
-              ${state.lastActionTime ? `<br>Last Action: ${state.lastActionTime}` : ''}
+              Added: ${addedAt}
+              ${lastActionTime ? `<br>Last Action: ${lastActionTime}` : ''}
             </div>
           </div>
         `;
@@ -824,9 +951,7 @@
 
     // Initialize the application
     document.addEventListener('DOMContentLoaded', function() {
-      filteredMachines = machines; // Initialize filtered machines
-      renderMachines();
-      updateStatus('🚀 Machine Control Center initialized successfully!');
+      loadMachines();
     });
 
     // Add keyboard shortcuts
@@ -842,6 +967,9 @@
         document.getElementById('searchInput').focus();
       }
     });
+
+    // Auto-refresh machines every 30 seconds
+    setInterval(loadMachines, 30000);
   </script>
 </body>
 </html>
